@@ -3,7 +3,9 @@ name: Build Mac app
 on:
   push:
     branches: [main]
+    paths: ["Sources/**", "Package.swift", "packaging/**", "scripts/**", ".github/workflows/build.yml"]
   pull_request:
+    paths: ["Sources/**", "Package.swift", "packaging/**", "scripts/**", ".github/workflows/build.yml"]
   workflow_dispatch:
 
 permissions:

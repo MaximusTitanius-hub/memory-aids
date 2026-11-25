@@ -1,0 +1,52 @@
+name: Build Windows app
+
+on:
+  push:
+    branches: [main]
+    paths: ["windows/**", ".github/workflows/build-windows.yml"]
+  pull_request:
+    paths: ["windows/**", ".github/workflows/build-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm ci
+
+      - name: Build installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+          npm run dist
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MemoryAids-Windows
+          path: windows/dist/MemoryAids-Setup.exe
+
+      - name: Publish download (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-v1.0.${{ github.run_number }}
+          name: Memory Aids for Windows 1.0.${{ github.run_number }}
+          body: |
+            Download **MemoryAids-Setup.exe** below and double-click it to install.
+            If Windows shows "Windows protected your PC", click **More info**, then **Run anyway** (the app isn't signed with a paid certificate).
+          files: windows/dist/MemoryAids-Setup.exe

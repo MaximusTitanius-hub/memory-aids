@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Memory Aids</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><img src="../assets/icon.png" alt=""> Memory Aids</div>
+    <nav>
+      <button class="nav" data-view="new">➕ New study set</button>
+      <button class="nav" data-view="study">🧠 Study (recall) <span id="due-badge" class="badge" hidden></span></button>
+      <button class="nav" data-view="settings">⚙️ Settings</button>
+    </nav>
+    <h3>My study sets</h3>
+    <div id="set-list"></div>
+  </aside>
+  <main id="main"></main>
+  <script src="app.js"></script>
+</body>
+</html>
