@@ -1,0 +1,42 @@
+name: Build Mac app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build app and disk image
+        env:
+          VERSION: 1.0.${{ github.run_number }}
+          BUILD: ${{ github.run_number }}
+        run: bash scripts/build_dmg.sh
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: MemoryAids-dmg
+          path: build/MemoryAids.dmg
+
+      - name: Publish download (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Memory Aids 1.0.${{ github.run_number }}
+          body: |
+            Download **MemoryAids.dmg** below, open it, and drag Memory Aids into Applications.
+            First launch: right-click the app > Open > Open (it isn't signed by an Apple developer account).
+          files: build/MemoryAids.dmg
