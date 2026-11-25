@@ -15,7 +15,7 @@ struct SetDetailView: View {
             VStack(spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(set.title).font(.title.bold())
+                        Text(set.title).font(.system(size: 28, weight: .heavy, design: .rounded))
                         Text("\(set.aids.count) memory aids · \(set.cards.count) flashcards · \(set.dueCount) due for review")
                             .foregroundStyle(.secondary)
                     }

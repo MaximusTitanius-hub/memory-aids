@@ -40,21 +40,23 @@ struct AidCard: View {
         let t = aid.technique
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(systemName: t?.symbol ?? "sparkles")
-                    .font(.title2)
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.accentColor))
+                TechniqueBadge(technique: t, size: 46)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(t.map { "\($0.id). \($0.name)" } ?? "Technique")
-                        .font(.caption.bold()).foregroundStyle(.secondary).textCase(.uppercase)
-                    Text(aid.title).font(.title2.bold())
+                    Text(t.map { "\($0.id) · \($0.name)" } ?? "Technique")
+                        .font(.rounded(.caption, weight: .heavy)).foregroundStyle(tint).textCase(.uppercase)
+                    Text(aid.title).font(.rounded(.title2, weight: .bold))
                 }
                 Spacer()
                 Button {
                     Speaker.shared.speak(speakableText)
-                } label: { Label("Read aloud", systemImage: "speaker.wave.2.fill") }
-                    .buttonStyle(.borderless)
+                } label: {
+                    Label("Read aloud", systemImage: "speaker.wave.2.fill")
+                        .font(.rounded(.callout, weight: .semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Capsule().fill(tint.opacity(0.12)))
+                        .foregroundStyle(tint)
+                }
+                .buttonStyle(.plain)
             }
 
             if !aid.explanation.isEmpty {
@@ -72,22 +74,34 @@ struct AidCard: View {
             if !aid.scene.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: t?.id == 14 ? "music.note.list" : "eye.fill")
-                        .foregroundStyle(Color.accentColor)
-                    Text(aid.scene).font(.title3).italic()
+                        .foregroundStyle(tint)
+                    Text(aid.scene).font(.system(.title3, design: .serif)).italic()
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.accentColor.opacity(0.08)))
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(tint.opacity(0.09)))
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2).fill(tint).frame(width: 4).padding(.vertical, 10)
+                }
             }
 
             AidVisual(aid: aid)
         }
-        .padding(20)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.secondary.opacity(0.15)))
+        .padding(22)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(alignment: .top) {
+            UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
+                .fill(LinearGradient(colors: [tint, tint.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
+                .frame(height: 6)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color.primary.opacity(0.07)))
+        .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
     }
+
+    private var tint: Color { aid.technique?.tint ?? Theme.brandColor }
 
     private var speakableText: String {
         ([aid.title, aid.scene] + aid.items.map { "\($0.label). \($0.detail)" }).joined(separator: ". ")

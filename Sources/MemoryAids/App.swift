@@ -10,6 +10,7 @@ struct MemoryAidsApp: App {
         WindowGroup("Memory Aids") {
             ContentView()
                 .environmentObject(store)
+                .tint(Theme.brandColor)
                 .frame(minWidth: 980, minHeight: 660)
         }
         .windowToolbarStyle(.unified)
@@ -39,6 +40,13 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
+                HStack(spacing: 10) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable().frame(width: 34, height: 34)
+                    Text("Memory Aids").font(.rounded(.title3, weight: .heavy))
+                }
+                .padding(.vertical, 6)
+                .selectionDisabled()
                 Section {
                     Label("New study set", systemImage: "plus.circle.fill")
                         .tag(SidebarItem.new)
@@ -49,7 +57,7 @@ struct ContentView: View {
                             Text("\(store.totalDue)")
                                 .font(.caption.bold())
                                 .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(Capsule().fill(Color.accentColor))
+                                .background(Capsule().fill(Color.orange))
                                 .foregroundStyle(.white)
                         }
                     }
@@ -58,7 +66,7 @@ struct ContentView: View {
                 Section("My study sets") {
                     ForEach(store.sets) { set in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(set.title).lineLimit(1)
+                            Text(set.title).font(.rounded(.body, weight: .semibold)).lineLimit(1)
                             Text("\(set.aids.count) aids · \(set.cards.count) cards")
                                 .font(.caption).foregroundStyle(.secondary)
                         }

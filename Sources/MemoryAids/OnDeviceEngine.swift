@@ -75,6 +75,11 @@ struct GenFacts {
 
 @available(macOS 26.0, *)
 struct OnDeviceEngine {
+    static var isAvailable: Bool {
+        if case .available = SystemLanguageModel.default.availability { return true }
+        return false
+    }
+
     private let chunkSize = 4500
     private let factsLimit = 5000
 
@@ -101,7 +106,7 @@ struct OnDeviceEngine {
     /// Shrinks long material into a list of key facts that fits the small context window.
     func condense(_ text: String, progress: @escaping (Int, Int) -> Void) async throws -> String {
         if text.count <= factsLimit { return text }
-        let chunks = Self.split(text, size: chunkSize)
+        let chunks = OnDeviceSplit.split(text, size: chunkSize)
         var facts: [String] = []
         for (i, chunk) in chunks.enumerated() {
             progress(i + 1, chunks.count)
@@ -142,28 +147,6 @@ struct OnDeviceEngine {
             to: "Material:\n\(facts)\n\nWrite flashcards covering the most important facts.",
             generating: GenCards.self).content
         return (g.title, g.cards.map { Flashcard(question: $0.question, answer: $0.answer, hint: $0.hint) })
-    }
-
-    static func split(_ text: String, size: Int) -> [String] {
-        var chunks: [String] = []
-        var current = ""
-        for paragraph in text.components(separatedBy: "\n") {
-            if current.count + paragraph.count > size, !current.isEmpty {
-                chunks.append(current)
-                current = ""
-            }
-            if paragraph.count > size {
-                var rest = Substring(paragraph)
-                while !rest.isEmpty {
-                    chunks.append(String(rest.prefix(size)))
-                    rest = rest.dropFirst(size)
-                }
-            } else {
-                current += paragraph + "\n"
-            }
-        }
-        if !current.isEmpty { chunks.append(current) }
-        return chunks
     }
 }
 #endif

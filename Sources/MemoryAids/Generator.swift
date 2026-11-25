@@ -2,13 +2,30 @@ import Foundation
 
 /// Which AI writes the aids.
 enum Engine: String, CaseIterable, Identifiable {
-    case auto, apple, claude
+    case auto, apple, ollama, claude
     var id: String { rawValue }
     var label: String {
         switch self {
         case .auto: return "Automatic"
-        case .apple: return "Apple on-device AI (free, offline)"
-        case .claude: return "Claude (needs API key, richer results)"
+        case .apple: return "Apple built-in AI"
+        case .ollama: return "Ollama"
+        case .claude: return "Claude"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .auto: return "Claude if you've saved a key, otherwise Apple's built-in AI, otherwise Ollama."
+        case .apple: return "Free and offline. Same small model on every Mac, so it's quick but simple."
+        case .ollama: return "Free and offline. Runs bigger models, so a powerful Mac (like an M4 Pro) gives much better aids."
+        case .claude: return "Best quality, draws a picture for each aid and reads scanned PDFs. Needs an API key."
+        }
+    }
+    var shortName: String {
+        switch self {
+        case .auto: return "Automatic"
+        case .apple: return "Apple built-in AI"
+        case .ollama: return "Ollama"
+        case .claude: return "Claude"
         }
     }
 }
@@ -58,6 +75,8 @@ final class Generator: ObservableObject {
         case .claude:
             guard let key = Keychain.loadKey(), !key.isEmpty else { throw ClaudeError.missingKey }
             return try await runClaude(key: key, material: material, pdfData: pdfData, techniques: techniques)
+        case .ollama:
+            return try await runOllama(material: material, techniques: techniques)
         default:
             return try await runApple(material: material, techniques: techniques)
         }
@@ -68,10 +87,88 @@ final class Generator: ObservableObject {
         switch engine {
         case .auto:
             if let key = Keychain.loadKey(), !key.isEmpty { return .claude }
-            return .apple
+            return appleAvailable ? .apple : .ollama
         default:
             return engine
         }
+    }
+
+    /// True when Apple's on-device model can be used on this Mac right now.
+    static var appleAvailable: Bool {
+        #if canImport(FoundationModels)
+        if #available(macOS 26.0, *) { return OnDeviceEngine.isAvailable }
+        #endif
+        return false
+    }
+
+    static var ollamaModel: String {
+        UserDefaults.standard.string(forKey: "ollamaModel") ?? OllamaClient.recommendedModel
+    }
+
+    // MARK: - Ollama
+
+    private func runOllama(material: String, techniques: [Technique]) async throws -> StudySet {
+        let model = Generator.ollamaModel
+        let state = await OllamaClient.status(model: model)
+        guard state.running else { throw OllamaError.notRunning }
+        guard state.hasModel else { throw OllamaError.missingModel(model) }
+        let text = material.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw OnDeviceError.noText }
+
+        let client = OllamaClient(model: model)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let totalSteps = Double(techniques.count + 2)
+
+        // Long material is condensed into key facts so it fits the model.
+        var facts = text
+        if text.count > 24000 {
+            let chunks = OnDeviceSplit.split(text, size: 12000)
+            var all: [String] = []
+            for (i, chunk) in chunks.enumerated() {
+                status = "Reading your material (part \(i + 1) of \(chunks.count))…"
+                let data = try await client.json(
+                    system: "You extract the key facts a student must memorise from study material. Keep facts accurate and precise.",
+                    prompt: "List the key facts (at most 20) in this part of the material:\n\n\(chunk)",
+                    schema: Schemas.facts)
+                all += try decoder.decode(APIFacts.self, from: data).facts
+            }
+            facts = String(all.map { "- " + $0 }.joined(separator: "\n").prefix(24000))
+        }
+        progress = 1 / totalSteps
+
+        var aids: [Aid] = []
+        for (i, t) in techniques.enumerated() {
+            status = "\(Fun.line(i)) Creating \(t.name) (\(i + 1) of \(techniques.count))"
+            do {
+                let data = try await client.json(
+                    system: Prompts.system,
+                    prompt: "Material:\n\(facts)\n\nCreate one memory aid for the material using this technique.\n\(Prompts.techniqueBlock(t))",
+                    schema: Schemas.singleAid)
+                let a = try decoder.decode(APIAidNoSVG.self, from: data)
+                aids.append(Aid(techniqueId: t.id, title: a.title, explanation: a.explanation, scene: a.scene,
+                                items: a.items.map { AidItem(label: $0.label, detail: $0.detail, color: $0.color.lowercased(), group: $0.group) },
+                                triangle: a.triangle, svg: ""))
+            } catch {
+                warnings.append("\(t.name): \(error.localizedDescription)")
+            }
+            progress = Double(i + 2) / totalSteps
+        }
+
+        status = "Writing flashcards…"
+        var title = "Study set"
+        var cards: [Flashcard] = []
+        do {
+            let data = try await client.json(system: Prompts.system, prompt: "Material:\n\(facts)\n\n\(Schemas.cardsPrompt)", schema: Schemas.cards)
+            let parsed = try decoder.decode(APICards.self, from: data)
+            title = parsed.title
+            cards = parsed.cards.map { Flashcard(question: $0.question, answer: $0.answer, hint: $0.hint) }
+        } catch {
+            warnings.append("Flashcards: \(error.localizedDescription)")
+        }
+        progress = 1
+        if aids.isEmpty && cards.isEmpty { throw OllamaError.message(warnings.first ?? "Nothing was generated.") }
+        return StudySet(title: title, sourceText: material, aids: aids, cards: cards)
     }
 
     // MARK: - Claude
@@ -180,7 +277,7 @@ final class Generator: ObservableObject {
 
             var aids: [Aid] = []
             for (i, t) in techniques.enumerated() {
-                status = "Creating \(t.name) (\(i + 1) of \(techniques.count))…"
+                status = "\(Fun.line(i)) Creating \(t.name) (\(i + 1) of \(techniques.count))"
                 do {
                     aids.append(try await engine.aid(for: t, facts: facts))
                 } catch {
@@ -230,6 +327,12 @@ enum Schemas {
         "svg": string,
     ])
     static let aids = object(["aids": ["type": "array", "items": aid]])
+    static let singleAid = object([
+        "title": string, "explanation": string, "scene": string,
+        "items": ["type": "array", "items": item],
+        "triangle": triangle,
+    ])
+    static let facts = object(["facts": ["type": "array", "items": string]])
     static let cards = object([
         "title": string,
         "cards": ["type": "array", "items": object(["question": string, "answer": string, "hint": string])],
@@ -252,6 +355,47 @@ struct APIAid: Decodable {
     var svg: String
 }
 struct APIAids: Decodable { var aids: [APIAid] }
+struct APIAidNoSVG: Decodable {
+    var title: String
+    var explanation: String
+    var scene: String
+    var items: [AidItem]
+    var triangle: TriangleSpec
+}
+struct APIFacts: Decodable { var facts: [String] }
+
+/// Splits long text into chunks at paragraph boundaries.
+enum OnDeviceSplit {
+    static func split(_ text: String, size: Int) -> [String] {
+        var chunks: [String] = []
+        var current = ""
+        for paragraph in text.components(separatedBy: "\n") {
+            if current.count + paragraph.count > size, !current.isEmpty {
+                chunks.append(current)
+                current = ""
+            }
+            if paragraph.count > size {
+                var rest = Substring(paragraph)
+                while !rest.isEmpty {
+                    chunks.append(String(rest.prefix(size)))
+                    rest = rest.dropFirst(size)
+                }
+            } else {
+                current += paragraph + "\n"
+            }
+        }
+        if !current.isEmpty { chunks.append(current) }
+        return chunks
+    }
+}
+
+/// Light-hearted lines shown while the AI works.
+enum Fun {
+    static let lines = ["🧠 Warming up neurons…", "🎨 Mixing colours…", "🏰 Building your memory palace…",
+                        "🦸 Recruiting element superheroes…", "🎵 Tuning the rhymes…", "🧲 Magnetising facts…",
+                        "🃏 Shuffling collectible cards…", "🚀 Launching mnemonics…"]
+    static func line(_ i: Int) -> String { lines[i % lines.count] }
+}
 struct APICard: Decodable { var question: String; var answer: String; var hint: String }
 struct APICards: Decodable { var title: String; var cards: [APICard] }
 

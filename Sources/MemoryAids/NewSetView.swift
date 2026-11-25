@@ -28,11 +28,7 @@ struct NewSetView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("What do you need to remember?").font(.largeTitle.bold())
-                    Text("Paste or type your notes, or drop in a PDF. Then pick the memory techniques you want.")
-                        .foregroundStyle(.secondary)
-                }
+                hero
 
                 materialSection
                 techniquesSection
@@ -46,10 +42,45 @@ struct NewSetView: View {
         }
     }
 
+    private var hero: some View {
+        HStack(spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Let's make it stick ✨").font(.system(size: 34, weight: .heavy, design: .rounded))
+                Text("Drop in your notes and turn them into mind maps, memory palaces, superhero cards and more.")
+                    .font(.rounded(.title3, weight: .medium))
+                    .opacity(0.9)
+            }
+            Spacer()
+            ZStack {
+                Circle().fill(.white.opacity(0.15)).frame(width: 110, height: 110)
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 54, weight: .semibold))
+                Image(systemName: "sparkles")
+                    .font(.system(size: 24, weight: .bold))
+                    .offset(x: 40, y: -38)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(26)
+        .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Theme.brand))
+        .shadow(color: Theme.brandColor.opacity(0.3), radius: 12, y: 6)
+    }
+
+    private func stepTitle(_ number: Int, _ text: String) -> some View {
+        HStack(spacing: 10) {
+            Text("\(number)")
+                .font(.rounded(.headline, weight: .heavy))
+                .foregroundStyle(.white)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Theme.brand))
+            Text(text).font(.rounded(.title2, weight: .bold))
+        }
+    }
+
     private var materialSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("1. Your material").font(.title2.bold())
+                stepTitle(1, "Your material")
                 Spacer()
                 if let pdfName {
                     Label(pdfName, systemImage: "doc.richtext").foregroundStyle(.secondary)
@@ -96,7 +127,7 @@ struct NewSetView: View {
     private var techniquesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("2. Memory techniques").font(.title2.bold())
+                stepTitle(2, "Pick your techniques")
                 Text("\(chosen.count) chosen").foregroundStyle(.secondary)
                 Spacer()
                 Button("Starter pack") { chosen = Techniques.starterPack }
@@ -111,11 +142,12 @@ struct NewSetView: View {
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: t.symbol)
-                                .font(.title3)
-                                .frame(width: 28)
-                                .foregroundStyle(on ? Color.white : Color.accentColor)
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(width: 34, height: 34)
+                                .foregroundStyle(on ? t.tint : Color.white)
+                                .background(Circle().fill(on ? Color.white : t.tint))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(t.id). \(t.name)").font(.headline)
+                                Text(t.name).font(.rounded(.headline))
                                 Text(t.summary).font(.caption)
                                     .foregroundStyle(on ? Color.white.opacity(0.85) : Color.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -124,10 +156,14 @@ struct NewSetView: View {
                             Image(systemName: on ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(on ? Color.white : Color.secondary)
                         }
-                        .padding(10)
+                        .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 10)
-                            .fill(on ? Color.accentColor : Color.secondary.opacity(0.08)))
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(on ? AnyShapeStyle(LinearGradient(colors: [t.tint, t.tint.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                     : AnyShapeStyle(Color(nsColor: .controlBackgroundColor))))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Color.clear : Color.primary.opacity(0.08)))
+                        .scaleEffect(on ? 1.0 : 0.98)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: on)
                         .foregroundStyle(on ? Color.white : Color.primary)
                     }
                     .buttonStyle(.plain)
@@ -138,20 +174,23 @@ struct NewSetView: View {
 
     private var generateSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("3. Create").font(.title2.bold())
+            stepTitle(3, "Create")
             HStack(spacing: 14) {
                 Button {
                     Task { await generate() }
                 } label: {
                     Label("Create memory aids", systemImage: "wand.and.stars")
-                        .font(.headline)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .font(.rounded(.title3, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22).padding(.vertical, 12)
+                        .background(Capsule().fill(Theme.brand))
+                        .shadow(color: Theme.brandColor.opacity(0.35), radius: 8, y: 4)
+                        .opacity(canGenerate ? 1 : 0.45)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.plain)
                 .disabled(!canGenerate)
 
-                Text("Using: " + (Generator.resolve(engine) == .claude ? "Claude" : "Apple on-device AI"))
+                Text("Using: " + Generator.resolve(engine).shortName)
                     .font(.callout).foregroundStyle(.secondary)
                 SettingsLink { Text("Change…") }
             }
